@@ -1,0 +1,6 @@
+issue,rows_affected,fix
+Duplicate batch rows,4,Removed
+Product name with wrong case or extra spaces,3,Standardised to official name
+Start date typed as dd/mm/yyyy,4,Parsed both formats to one date type
+Missing actual titer,2,Kept batch; excluded from yield KPI only
+Rows before vs after cleaning,4,"253 rows in, 249 unique batches out"

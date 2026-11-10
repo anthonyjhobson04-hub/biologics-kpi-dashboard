@@ -1,0 +1,61 @@
+// DAX measures: create each with Modeling > New measure, stored in a "_Measures" table
+// (Enter Data > name it _Measures > load; delete its dummy column after adding the first measure)
+
+// ---- Core KPIs ---------------------------------------------------------------
+Batches = COUNTROWS ( batches_clean )
+
+Batch Success % =
+DIVIDE ( CALCULATE ( [Batches], batches_clean[is_success] = TRUE () ), [Batches] )
+
+RFT % =
+DIVIDE ( CALCULATE ( [Batches], batches_clean[is_rft] = TRUE () ), [Batches] )
+
+Titer vs Target = AVERAGE ( batches_clean[titer_vs_target] )      // blanks ignored
+
+OTD % =
+DIVIDE (
+    CALCULATE ( [Batches], batches_clean[on_time] = TRUE () ),
+    CALCULATE ( [Batches], NOT ISBLANK ( batches_clean[on_time] ) )   // rejected batches excluded
+)
+
+Purified kg = SUM ( batches_clean[purified_kg] )
+
+Unplanned Downtime h =
+CALCULATE ( SUM ( downtime_clean[hours] ), downtime_clean[category] = "Unplanned" )
+
+// ---- Energy & sustainability ----------------------------------------------------
+Electricity MWh = DIVIDE ( SUM ( batches_clean[electricity_kwh] ), 1000 )
+
+Solar Share % =
+DIVIDE (
+    CALCULATE ( SUM ( batches_clean[electricity_kwh] ), batches_clean[electricity_source] = "Solar" ),
+    SUM ( batches_clean[electricity_kwh] )
+)
+
+CO2e t = DIVIDE ( SUM ( batches_clean[co2e_kg] ), 1000 )
+
+kWh per kg = DIVIDE ( SUM ( batches_clean[electricity_kwh] ), [Purified kg] )
+
+// ---- Time intelligence (needs the Date table marked as a date table) ---------------
+Batch Success % YTD = CALCULATE ( [Batch Success %], DATESYTD ( 'Date'[Date] ) )
+
+RFT % Prior Year = CALCULATE ( [RFT %], SAMEPERIODLASTYEAR ( 'Date'[Date] ) )
+
+RFT Change vs PY (pts) = ( [RFT %] - [RFT % Prior Year] ) * 100
+
+RFT % Rolling 3M =
+CALCULATE ( [RFT %], DATESINPERIOD ( 'Date'[Date], MAX ( 'Date'[Date] ), -3, MONTH ) )
+
+// ---- Context / comparison ------------------------------------------------------
+RFT % Site = CALCULATE ( [RFT %], ALL ( dim_bioreactor ) )          // ignores the bioreactor filter
+
+RFT Gap vs Site (pts) = ( [RFT %] - [RFT % Site] ) * 100
+
+Downtime h per Batch = DIVIDE ( [Unplanned Downtime h], [Batches] )
+
+Worst Bioreactor (RFT) =
+VAR t = ADDCOLUMNS ( VALUES ( dim_bioreactor[bioreactor] ), "@rft", [RFT %] )
+RETURN MAXX ( TOPN ( 1, t, [@rft], ASC ), dim_bioreactor[bioreactor] )
+
+// ---- Calculated COLUMN (Table view > batches_clean > New column), not a measure --------
+// RFT Label = IF ( batches_clean[is_rft], "Right first time", "Needed rework / deviation" )
